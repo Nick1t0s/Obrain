@@ -43,7 +43,7 @@ class NoteMessage:
         self._llm_processed: bool = False
 
         # 🔹 Метаданные
-        self.timestamp_str: str = self._date.strftime("[%Y-%m-%d %H:%M]")
+        self.timestamp_str: str = self._date.strftime("%H:%M")
         self.date_str: str = self._date.strftime("%Y-%m-%d")
         self.voice_duration: Optional[int] = None
 
@@ -248,7 +248,7 @@ class NoteMessage:
         return f"{self.timestamp_str}{duration} {type_mark} {self.raw_text}\n"
 
     def format_processed_entry(self) -> str:
-        return f"### {self.timestamp_str}\n{self.processed_text}\n"
+        return f"#### **{self.timestamp_str}**\n{self.processed_text}\n"
 
     def __str__(self) -> str:
         status = "✅" if self.is_ready else "⏳" if self.raw_text else "❌"
