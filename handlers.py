@@ -75,6 +75,7 @@ def handle_help(message):
     )
 
     bot.reply_to(message, help_text, parse_mode="Markdown")
+    logger.info(f"✅ Команда /help от пользователя {message.from_user.id}")
 
 
 # ==========================================
@@ -102,6 +103,8 @@ def handle_status(message):
     )
 
     bot.reply_to(message, status_text, parse_mode="Markdown")
+    logger.info(f"✅ Команда /status от пользователя {message.from_user.id}")
+
 
 @bot.message_handler(func=lambda m: True)
 def handle_message(message):
