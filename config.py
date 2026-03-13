@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     ollama_model_summary: str = Field("llama3:8b", description="Модель для суммари")
     llm_temperature: float = Field(0.3, ge=0.0, le=1.0, description="Температура генерации")
     llm_timeout: int = Field(120, gt=0, description="Таймаут запроса LLM (сек)")
+    # 0 = выгрузить сразу после запроса (рекомендуется для экономии VRAM)
+    # -1 = держать бесконечно
+    # 5 = стандартное поведение Ollama
+    ollama_keep_alive: int = Field(0, ge=-1, description="Время жизни модели в VRAM (мин)")
 
     # ==========================================
     # 🎙️ WHISPER (TRANSCRIPTION)

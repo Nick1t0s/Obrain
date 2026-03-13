@@ -174,7 +174,7 @@ class NoteMessage:
                 pass
 
     def _process_with_ollama(self):
-        """Отправляет сырой текст в Ollama"""
+        """Отправляет сырой текст в Ollama с принудительной выгрузкой модели"""
         if not self.raw_text or self._llm_processed:
             return
 
@@ -188,6 +188,7 @@ class NoteMessage:
                     "prompt": prompt,
                     "temperature": settings.llm_temperature,
                     "stream": False,
+                    "keep_alive": settings.ollama_keep_alive,  # 🔹 ГЛАВНОЕ ИЗМЕНЕНИЕ
                 },
                 timeout=settings.llm_timeout,
                 headers={"Content-Type": "application/json"}
@@ -197,7 +198,7 @@ class NoteMessage:
 
             self.processed_text = result.get("response", "").strip()
             self._llm_processed = True
-            logger.info(f"✅ LLM обработка завершена")
+            logger.info(f"✅ LLM обработка завершена (модель выгружена через {settings.ollama_keep_alive} мин)")
 
         except Exception as e:
             logger.error(f"❌ Ollama API error: {e}")
