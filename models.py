@@ -2,12 +2,13 @@ import os
 import gc
 import tempfile
 import logging
+import requests
 from datetime import datetime
 from typing import Optional
-
 import telebot
-from faster_whisper import WhisperModel
 
+from faster_whisper import WhisperModel
+from bot import bot  # Импортируем глобальный экземпляр
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,163 +16,225 @@ logger = logging.getLogger(__name__)
 
 class NoteMessage:
     """
-    Обёртка над сообщением Telegram.
-    Поддерживает: текстовые сообщения и голосовые (ГС).
-    НЕ поддерживает: аудиофайлы, документы, видео.
+    Инкапсулирует обработку сообщения от пользователя.
 
-    Память VRAM очищается сразу после транскрибации.
+    Публичный API:
+        - run() -> self: запускает полный пайплайн (транскрибация + LLM)
+        - Атрибуты: raw_text, processed_text, date_str, timestamp_str
+
+    Свойства (read-only):
+        - is_empty, is_ready, is_voice, is_text
     """
 
     def __init__(self, message: telebot.types.Message):
+        # 🔹 Базовые данные
         self._message = message
-        self._user_id = message.from_user.id
-        self._date = datetime.fromtimestamp(message.date)
+        self._user_id: int = message.from_user.id
+        self._date: datetime = datetime.fromtimestamp(message.date)
 
-        # Контент
-        self.raw_text: Optional[str] = None
-        self.is_voice: bool = False
-        self.is_text: bool = False
+        # 🔹 Контент (заполняется в процессе)
+        self.raw_text: Optional[str] = None  # Сырой текст
+        self.processed_text: Optional[str] = None  # Текст после LLM
 
-        # Метаданные
+        # 🔹 Флаги состояния
+        self._is_voice: bool = False
+        self._is_text: bool = False
+        self._transcribed: bool = False
+        self._llm_processed: bool = False
+
+        # 🔹 Метаданные
         self.timestamp_str: str = self._date.strftime("[%Y-%m-%d %H:%M]")
         self.date_str: str = self._date.strftime("%Y-%m-%d")
-        self.voice_duration: Optional[int] = None  # Длительность ГС в секундах
+        self.voice_duration: Optional[int] = None
 
-        # Парсинг при инициализации
+        # 🔹 Инициализация: парсинг типа сообщения
         self._parse_content()
 
-    def _parse_content(self):
-        """Определяет тип и извлекает контент. Только текст или ГС."""
+    # ==========================================
+    # 📦 СВОЙСТВА (@property)
+    # ==========================================
 
-        # 🔹 Текстовое сообщение
+    @property
+    def is_empty(self) -> bool:
+        return not self.raw_text or not self.raw_text.strip()
+
+    @property
+    def is_ready(self) -> bool:
+        return bool(self.processed_text and self.processed_text.strip())
+
+    @property
+    def is_voice(self) -> bool:
+        return self._is_voice
+
+    @property
+    def is_text(self) -> bool:
+        return self._is_text
+
+    @property
+    def user_id(self) -> int:
+        return self._user_id
+
+    # ==========================================
+    # 🚀 ПУБЛИЧНЫЙ МЕТОД
+    # ==========================================
+
+    def run(self) -> "NoteMessage":
+        """Запускает полный пайплайн обработки"""
+        if self.is_empty:
+            logger.warning("⚠️ run() вызван для пустого сообщения")
+            return self
+
+        # Шаг 1: Транскрибация (если ГС)
+        if self._is_voice and not self._transcribed:
+            self._transcribe()
+
+        # Шаг 2: Обработка через LLM (если есть текст)
+        if self.raw_text and not self._llm_processed and not self.is_empty:
+            self._process_with_ollama()
+
+        return self
+
+    # ==========================================
+    # 🔒 ПРИВАТНЫЕ МЕТОДЫ
+    # ==========================================
+
+    def _parse_content(self):
         if text := self._message.text:
-            self.is_text = True
+            self._is_text = True
             self.raw_text = text.strip()
             logger.debug(f"📝 Текст: {self.raw_text[:60]}...")
-            return
 
-        # 🔹 Голосовое сообщение (ГС) — именно то, что нужно
-        if voice := self._message.voice:
-            self.is_voice = True
+        elif voice := self._message.voice:
+            self._is_voice = True
             self.voice_duration = voice.duration
-            self._process_voice_message(voice)
+            logger.debug(f"🎤 Получено ГС: {voice.duration}с")
+        else:
+            logger.debug(f"⚠️ Неподдерживаемый тип сообщения от {self._user_id}")
+            self.raw_text = ""
+
+    def _transcribe(self):
+        """Скачивает и транскрибирует ГС"""
+        if not self._is_voice or self._transcribed:
             return
 
-        # 🔹 Всё остальное — игнорируем
-        logger.debug(f"⚠️ Пропущен неподдерживаемый тип сообщения от {self._user_id}")
-        self.raw_text = ""
-
-    def _process_voice_message(self, voice: telebot.types.Voice):
-        """Скачивает и транскрибирует ГС. Очищает память после."""
-
-        # Проверка размера
+        voice = self._message.voice
         if voice.file_size > settings.get_max_file_size_bytes():
             logger.warning(f"❌ ГС слишком большое: {voice.file_size / 1024 / 1024:.1f} МБ")
-            self.raw_text = "[Ошибка: ГС слишком большое]"
+            self.raw_text = "[Ошибка: файл слишком большой]"
+            self._transcribed = True
             return
 
-        bot = telebot.TeleBot(settings.bot_token)
         temp_path = None
-
         try:
-            # Скачивание
-            file_info = bot.get_file(voice.file_id)
+            file_info = bot.get_file(voice.file_id)  # Используем глобальный bot
             with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as tmp:
                 tmp.write(bot.download_file(file_info.file_path))
                 temp_path = tmp.name
 
-            logger.debug(f"🎤 ГС загружено: {temp_path}, {voice.duration}с")
-
-            # Транскрибация
             self.raw_text = self._transcribe_with_whisper(temp_path)
+            self._transcribed = True
+            logger.info(f"✅ Транскрибация завершена")
 
         except Exception as e:
             logger.error(f"❌ Ошибка обработки ГС: {e}")
             self.raw_text = f"[Ошибка: {type(e).__name__}]"
 
         finally:
-            # Удаление временного файла
             if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
-                logger.debug(f"🗑️ Удалён временный файл: {temp_path}")
 
     def _transcribe_with_whisper(self, audio_path: str) -> str:
-        """
-        Транскрибирует аудио через faster-whisper.
-        Модель загружается и выгружается в рамках этого вызова.
-        """
         model = None
         try:
-            # Загрузка модели в память
             model = WhisperModel(
                 settings.whisper_model_name,
                 device=settings.whisper_device,
                 compute_type=settings.whisper_compute_type,
             )
-            logger.debug(f"🧠 Whisper загружен: {settings.whisper_model_name}")
-
-            # Транскрибация
             segments, _ = model.transcribe(
                 audio_path,
                 language=settings.whisper_language,
                 beam_size=5,
-                vad_filter=True,  # Отсечение тишины
+                vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=500)
             )
-
-            text = " ".join(seg.text for seg in segments).strip()
-            logger.info(f"✅ Транскрибация: {len(text)} символов")
-            return text
+            return " ".join(seg.text for seg in segments).strip()
 
         except Exception as e:
             logger.error(f"❌ Whisper error: {e}")
             return f"[Whisper error: {str(e)}]"
 
         finally:
-            # === 🧹 ОЧИСТКА ПАМЯТИ (КРИТИЧНО) ===
             if model is not None:
-                del model  # Удаляем объект модели
-
-            gc.collect()  # Сборка мусора
-
-            # Очистка кэша CUDA, если torch доступен
+                del model
+            gc.collect()
             try:
                 import torch
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                    logger.debug("🧹 CUDA cache cleared")
             except ImportError:
                 pass
 
-            logger.debug("🧹 Память освобождена после транскрибации")
+    def _process_with_ollama(self):
+        """Отправляет сырой текст в Ollama"""
+        if not self.raw_text or self._llm_processed:
+            return
+
+        prompt = self._build_cleaning_prompt()
+
+        try:
+            response = requests.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json={
+                    "model": settings.ollama_model_clean,
+                    "prompt": prompt,
+                    "temperature": settings.llm_temperature,
+                    "stream": False,
+                },
+                timeout=settings.llm_timeout,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            self.processed_text = result.get("response", "").strip()
+            self._llm_processed = True
+            logger.info(f"✅ LLM обработка завершена")
+
+        except Exception as e:
+            logger.error(f"❌ Ollama API error: {e}")
+            self.processed_text = f"[LLM error: {type(e).__name__}]"
+
+    def _build_cleaning_prompt(self) -> str:
+        meta = f"Дата: {self.date_str}, Время: {self.timestamp_str}, Тип: {'голос' if self.is_voice else 'текст'}"
+        return (
+            f"Ты — ассистент для ведения заметок. Обработай сырую запись пользователя.\n"
+            f"Контекст: {meta}\n\n"
+            f"Сырой текст:\n\"\"\"{self.raw_text}\"\"\"\n\n"
+            f"Инструкции:\n"
+            f"1. Исправь ошибки, убери слова-паразиты и повторы.\n"
+            f"2. Сохрани суть, сделай текст лаконичным (1-3 предложения).\n"
+            f"3. Если есть задача — выдели её явно.\n"
+            f"4. Верни ТОЛЬКО обработанный текст, без комментариев и кавычек.\n"
+            f"5. Язык ответа: русский."
+        )
 
     # ==========================================
-    # 📦 ПУБЛИЧНЫЙ ИНТЕРФЕЙС
+    # 📦 ФОРМАТИРОВАНИЕ
     # ==========================================
 
-    def format_for_raw_log(self) -> str:
-        """Формат для записи в raw_data.md"""
+    def format_raw_entry(self) -> str:
         type_mark = "🎤" if self.is_voice else "📝"
-        duration_info = f" ({self.voice_duration}с)" if self.voice_duration else ""
-        return f"{self.timestamp_str}{duration_info} {type_mark} {self.raw_text}\n"
+        duration = f" ({self.voice_duration}с)" if self.voice_duration else ""
+        return f"{self.timestamp_str}{duration} {type_mark} {self.raw_text}\n"
 
-    def to_llm_context(self) -> dict:
-        """Словарь для отправки в LLM"""
-        return {
-            "timestamp": self.timestamp_str,
-            "date": self.date_str,
-            "type": "voice" if self.is_voice else "text",
-            "duration_sec": self.voice_duration if self.is_voice else None,
-            "text": self.raw_text,
-        }
-
-    def is_empty(self) -> bool:
-        """Проверка, есть ли полезный контент"""
-        return not self.raw_text or not self.raw_text.strip()
+    def format_processed_entry(self) -> str:
+        return f"### {self.timestamp_str}\n{self.processed_text}\n"
 
     def __str__(self) -> str:
+        status = "✅" if self.is_ready else "⏳" if self.raw_text else "❌"
         icon = "🎤" if self.is_voice else "📝"
-        return f"{icon} NoteMessage[{self.date_str}] ({len(self.raw_text or '')} chars)"
+        return f"{status} {icon} NoteMessage[{self.date_str}]"
 
     def __repr__(self) -> str:
         return self.__str__()
