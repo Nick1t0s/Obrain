@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 from datetime import time
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     ollama_model_summary: str = Field("llama3:8b", description="Модель для суммари")
     llm_temperature: float = Field(0.3, ge=0.0, le=1.0, description="Температура генерации")
     llm_timeout: int = Field(120, gt=0, description="Таймаут запроса LLM (сек)")
+
+    # ==========================================
+    # 🎙️ WHISPER (TRANSCRIPTION)
+    # ==========================================
+    whisper_model: str = Field("large-v3", description="Модель Whisper для транскрибации")
+    whisper_device: Literal["cpu", "cuda", "auto"] = Field("cuda", description="Устройство для Whisper")
+    whisper_compute_type: Literal["int8", "int8_float16", "float16", "float32"] = Field(
+        "int8_float16", description="Тип вычислений для Whisper (экономия VRAM)"
+    )
+    whisper_language: str = Field("ru", description="Язык по умолчанию для транскрибации")
 
     # ==========================================
     # ⏰ SCHEDULE
@@ -87,6 +97,22 @@ class Settings(BaseSettings):
             raise ValueError("⚠️ DAILY_SUMMARY_TIME должен быть в формате ЧЧ:ММ (например, 23:30)")
         return v
 
+    @field_validator('whisper_model')
+    @classmethod
+    def validate_whisper_model(cls, v):
+        """Проверяет название модели Whisper"""
+        valid_models = [
+            "tiny", "tiny.en",
+            "base", "base.en",
+            "small", "small.en",
+            "medium", "medium.en",
+            "large", "large-v1", "large-v2", "large-v3", "large-v3-turbo"
+        ]
+        if v not in valid_models:
+            # Не блокируем, но предупреждаем о кастомной модели
+            print(f"⚠️ Whisper: модель '{v}' не в списке стандартных. Убедитесь, что она установлена.")
+        return v
+
     @model_validator(mode='after')
     def create_directories(self):
         """Автоматически создает папки, если они не существуют"""
@@ -95,7 +121,6 @@ class Settings(BaseSettings):
 
         # Убедимся, что родительская папка для raw файла существует
         self.path_to_raw.parent.mkdir(parents=True, exist_ok=True)
-
         return self
 
     # ==========================================
@@ -136,6 +161,14 @@ class Settings(BaseSettings):
         """Список всех используемых моделей"""
         return [self.ollama_model_clean, self.ollama_model_summary]
 
+    @property
+    def whisper_model_name(self) -> str:
+        """
+        Возвращает имя модели Whisper в формате для faster-whisper.
+        Заменяет ':' на '-', если модель указана в стиле Ollama.
+        """
+        return self.whisper_model.replace(":", "-")
+
     def __str__(self) -> str:
         """Красивый вывод конфигурации для логов"""
         return (
@@ -146,7 +179,8 @@ class Settings(BaseSettings):
             f"  • Journal: {self.path_to_journal}\n"
             f"  • Summary: {self.path_to_summary}\n"
             f"  • Ollama: {self.ollama_base_url}\n"
-            f"  • Models: {', '.join(self.ollama_models)}\n"
+            f"  • Ollama Models: {', '.join(self.ollama_models)}\n"
+            f"  • Whisper: {self.whisper_model} ({self.whisper_device}, {self.whisper_compute_type})\n"
             f"  • Debug: {self.debug_mode}"
         )
 
