@@ -9,6 +9,9 @@ from config import settings
 
 import logging
 
+logger = logging.getLogger(__name__)
+
+
 class MonthlySummarizer(BaseSummarizer):
     """
     Ежемесячная суммаризация.
