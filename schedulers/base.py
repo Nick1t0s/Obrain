@@ -4,7 +4,7 @@ import logging
 import requests
 from abc import ABC, abstractmethod
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, List
 
 from config import settings
