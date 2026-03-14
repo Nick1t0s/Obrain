@@ -79,14 +79,14 @@ class NoteMessage:
     # ==========================================
 
     def run(self):
+        # Шаг 1: Транскрибация (если ГС)
+        if self._is_voice and not self._transcribed:
+            self._transcribe()
+
         """Запускает полный пайплайн обработки"""
         if self.is_empty:
             logger.warning("⚠️ run() вызван для пустого сообщения")
             return self
-
-        # Шаг 1: Транскрибация (если ГС)
-        if self._is_voice and not self._transcribed:
-            self._transcribe()
 
         # Шаг 2: Обработка через LLM (если есть текст)
         if self.raw_text and not self._llm_processed and not self.is_empty:
