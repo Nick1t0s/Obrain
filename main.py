@@ -1,10 +1,10 @@
+# main.py
 import logging
 from bot import bot
 from config import settings
 
-# Настройка логирования
 logging.basicConfig(
-    level=logging.INFO if not settings.debug_mode else logging.DEBUG,
+    level=logging.DEBUG if settings.debug_mode else logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
@@ -14,13 +14,20 @@ logger = logging.getLogger(__name__)
 
 def main():
     logger.info("🚀 Запуск бота...")
-    logger.info(settings)  # Вывод конфига в лог
+    logger.info(settings)
 
-    # Импорт хендлеров (чтобы зарегистрировать их в боте)
+    # Импорт хендлеров (регистрация команд)
     import handlers
 
     logger.info("✅ Бот готов к работе")
-    bot.infinity_polling()
+
+    # 🔹 Запуск поллинга — без лишних параметров
+    try:
+        bot.infinity_polling()
+    except KeyboardInterrupt:
+        logger.info("👋 Остановка бота...")
+    except Exception as e:
+        logger.exception(f"❌ Критическая ошибка: {e}")
 
 
 if __name__ == "__main__":

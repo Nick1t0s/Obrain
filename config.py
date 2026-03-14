@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     debug_mode: bool = Field(False, description="Режим отладки")
     timezone: str = Field("Europe/Moscow", description="Часовой пояс")
 
+    # ==========================================
+    # 🌐 PROXY
+    # ==========================================
+    proxy_type: str = Field("socks5", description="Тип прокси: socks5, http, https")
+    proxy_host: Optional[str] = Field(None, description="Хост прокси")
+    proxy_port: Optional[int] = Field(None, description="Порт прокси")
+    proxy_login: Optional[str] = Field(None, description="Логин прокси")
+    proxy_password: Optional[str] = Field(None, description="Пароль прокси")
+
+    # Таймауты для нестабильного соединения
+    telegram_timeout: int = Field(30, ge=10, le=120, description="Таймаут запросов Telegram (сек)")
+    telegram_long_polling_timeout: int = Field(60, ge=30, le=300, description="Таймаут длинного опроса")
+
     # Настройки для загрузки из .env
     model_config = SettingsConfigDict(
         env_file=".env",

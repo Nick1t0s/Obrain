@@ -97,6 +97,7 @@ class NoteMessage:
     # ==========================================
 
     def _parse_content(self):
+
         if text := self._message.text:
             self._is_text = True
             self.raw_text = text.strip()

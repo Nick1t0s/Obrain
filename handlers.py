@@ -114,15 +114,12 @@ def handle_message(message):
     if not settings.is_allowed_user(message.from_user.id):
         bot.reply_to(message, "⛔️ Доступ запрещён")
         return
-
     # 2. Сохраняем сообщение
     note = NoteMessage(message)
 
     # 3. Игнорируем пустые
     if note.is_empty:
-        return
-
-    note.run()  # Запускаем полный пайплайн
+        return    note.run()  # Запускаем полный пайплайн
 
     # 4. Сохраняем сырую запись
     try:
