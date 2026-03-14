@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import pytz
 
-from base import BaseSummarizer
+from schedulers.base import BaseSummarizer
 from config import settings
 
 import logging

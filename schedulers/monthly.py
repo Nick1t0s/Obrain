@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from calendar import monthrange
 import pytz
 
-from base import BaseSummarizer
+from schedulers.base import BaseSummarizer
 from config import settings
 
 import logging
