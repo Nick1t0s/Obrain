@@ -5,6 +5,11 @@ from datetime import time
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BASE_DIR = Path(__file__).resolve().parent
+ENV_FILE = BASE_DIR / ".env"
+
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=ENV_FILE, override=True)
 
 class Settings(BaseSettings):
     """
