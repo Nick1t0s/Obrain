@@ -117,9 +117,8 @@ def handle_message(message):
     # 2. Сохраняем сообщение
     note = NoteMessage(message)
 
-    # 3. Игнорируем пустые
-    if note.is_empty:
-        return    note.run()  # Запускаем полный пайплайн
+    # 3. Запускаем полный пайплайн
+    note.run()
 
     # 4. Сохраняем сырую запись
     try:
