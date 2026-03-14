@@ -106,8 +106,10 @@ def handle_status(message):
     logger.info(f"✅ Команда /status от пользователя {message.from_user.id}")
 
 
-@bot.message_handler(func=lambda m: True)
+@bot.message_handler(content_types=['text', 'voice'], func=lambda m: True)
 def handle_message(message):
+    logger.info(f"📨 Получено сообщение: type=text:{bool(message.text)}, voice:{bool(message.voice)}, from:{message.from_user.id}")
+
     # 1. Проверка доступа
     if not settings.is_allowed_user(message.from_user.id):
         bot.reply_to(message, "⛔️ Доступ запрещён")
