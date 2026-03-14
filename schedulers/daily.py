@@ -100,6 +100,5 @@ class DailySummarizer(BaseSummarizer):
 
         logging.info(f"📝 {self.name}: результат сохранён в {daily_file}")
 
-ds = DailySummarizer(Path("states"))
-print(ds.summary_time)
+
 
