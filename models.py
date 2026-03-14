@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Optional
 import telebot
 
-l
 
 from faster_whisper import WhisperModel
 from bot import bot  # Импортируем глобальный экземпляр
@@ -151,7 +150,6 @@ class NoteMessage:
                 settings.whisper_model_name,
                 device=settings.whisper_device,
                 compute_type=settings.whisper_compute_type,
-                ocal_files_only=True
             )
             segments, _ = model.transcribe(
                 audio_path,
