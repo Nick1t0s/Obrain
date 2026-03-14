@@ -1,4 +1,30 @@
-# main.py
+import os
+import sys
+def _fix_proxy_schemes():
+    """Исправляет socks:// и socks5:// → socks5h:// во всех proxy-переменных"""
+    for var in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']:
+        val = os.environ.get(var, '')
+        if val:
+            # socks:// → socks5h://
+            if val.startswith('socks://'):
+                fixed = val.replace('socks://', 'socks5h://', 1)
+                os.environ[var] = fixed
+                print(f"🔧 Fixed {var}: socks:// → socks5h://", file=sys.stderr)
+            # socks5:// → socks5h:// (если нет 'h')
+            elif val.startswith('socks5://') and not val.startswith('socks5h://'):
+                fixed = val.replace('socks5://', 'socks5h://', 1)
+                os.environ[var] = fixed
+                print(f"🔧 Fixed {var}: socks5:// → socks5h://", file=sys.stderr)
+
+# Вызываем ДО всего
+_fix_proxy_schemes()
+
+# 🔹 Также включаем offline-режим для HuggingFace
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
+
 import logging
 from bot import bot
 from config import settings

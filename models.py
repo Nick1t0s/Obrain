@@ -7,8 +7,7 @@ from datetime import datetime
 from typing import Optional
 import telebot
 
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+l
 
 from faster_whisper import WhisperModel
 from bot import bot  # Импортируем глобальный экземпляр
@@ -152,6 +151,7 @@ class NoteMessage:
                 settings.whisper_model_name,
                 device=settings.whisper_device,
                 compute_type=settings.whisper_compute_type,
+                ocal_files_only=True
             )
             segments, _ = model.transcribe(
                 audio_path,
@@ -159,6 +159,7 @@ class NoteMessage:
                 beam_size=5,
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=500)
+
             )
             return " ".join(seg.text for seg in segments).strip()
 
