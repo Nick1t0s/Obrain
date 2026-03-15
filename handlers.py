@@ -2,6 +2,7 @@ import logging
 from bot import bot
 from config import settings
 from models import NoteMessage
+from schedulers import collector
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,98 @@ def handle_status(message):
     logger.info(f"✅ Команда /status от пользователя {message.from_user.id}")
 
 
+@bot.message_handler(commands=["change_data"])
+def handle_change_data(message):
+    """Обработка команды /change_data для точечного обновления базы"""
+
+    if not settings.is_allowed_user(message.from_user.id):
+        bot.reply_to(message, "⛔️ Доступ запрещён")
+        return
+
+    # Извлекаем текст после команды
+    user_input = message.text.replace("/change_data", "").strip()
+
+    if not user_input:
+        bot.reply_to(
+            message,
+            "📝 Использование:\n`/change_data я играю в доту`\n\n"
+            "Опишите факт, который нужно добавить или обновить.",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        collector.change_data(user_input)
+
+    except Exception as e:
+        logger.exception(f"❌ Ошибка обновления базы: {e}")
+        bot.reply_to(message, f"❌ Ошибка: {type(e).__name__}", parse_mode="Markdown")
+    else:
+        bot.reply_to(message, f"Успешно обновлена база знаний")
+
 @bot.message_handler(content_types=['text', 'voice'], func=lambda m: True)
+@bot.message_handler(commands=["collect"])
+def handle_collect(message):
+    """Ручной запуск сбора данных за указанный день: /collect 2026-03-27"""
+
+    if not settings.is_allowed_user(message.from_user.id):
+        bot.reply_to(message, "⛔️ Доступ запрещён")
+        return
+
+    # Парсим дату из команды
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        # Если дата не указана — берём вчера
+        from datetime import datetime, timedelta
+        target_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        bot.reply_to(
+            message,
+            f"📅 Дата не указана. Использую вчера: `{target_date}`\n"
+            f"Пример: `/collect 2026-03-27`",
+            parse_mode="Markdown"
+        )
+    else:
+        target_date = parts[1].strip()
+
+    # Валидация формата даты
+    try:
+        from datetime import datetime
+        datetime.strptime(target_date, "%Y-%m-%d")
+    except ValueError:
+        bot.reply_to(
+            message,
+            f"❌ Неверный формат даты. Используйте ГГГГ-ММ-ДД\n"
+            f"Пример: `/collect 2026-03-27`",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        logger.info(f"🔄 /collect: запускаю сбор за {target_date}")
+        bot.reply_to(message, f"🔄 Обрабатываю {target_date}...")
+
+        # 1. Собираем заметки за день
+
+
+        # 2. Запускаем агрегацию
+        collector.collect_data(period_id=target_date)
+
+        # 3. Отчёт пользователю
+        bot.reply_to(
+            message,
+            f"✅ Данные за {target_date} добавлены в базу!\n"
+            f"🔍 Просмотр: `/view_data`",
+            parse_mode="Markdown"
+        )
+        logger.info(f"✅ /collect: завершено за {target_date}")
+
+    except TimeoutError:
+        logger.error(f"⏱️ /collect: таймаут")
+        bot.reply_to(message, "⏱️ Превышено время обработки. Попробуйте позже.", parse_mode="Markdown")
+    except Exception as e:
+        logger.exception(f"❌ /collect: ошибка {type(e).__name__}: {e}")
+        bot.reply_to(message, f"❌ Ошибка: {type(e).__name__}", parse_mode="Markdown")
+
 def handle_message(message):
     logger.info(f"📨 Получено сообщение: type=text:{bool(message.text)}, voice:{bool(message.voice)}, from:{message.from_user.id}")
 

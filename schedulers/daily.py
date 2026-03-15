@@ -8,6 +8,8 @@ from config import settings
 
 import logging
 
+from schedulers import collector
+
 logger = logging.getLogger(__name__)
 
 
@@ -102,6 +104,10 @@ class DailySummarizer(BaseSummarizer):
             f.write(f"\n{summary}\n")
 
         logging.info(f"📝 {self.name}: результат сохранён в {daily_file}")
+
+        collector.collect_data(period_id)
+
+
 
 
 
