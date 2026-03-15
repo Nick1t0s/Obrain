@@ -25,7 +25,7 @@ class Collector:
             response = requests.post(
                 f"{settings.ollama_base_url}/api/generate",
                 json={
-                    "model": settings.ollama_model_summary,
+                    "model": settings.ollama_model_collect,
                     "system": "Ты — редактор базы знаний. Обновляешь хранилище новыми данными, сохраняя структуру. Не добавляешь от себя комментарии.",
                     "prompt": prompt,
                     "stream": False,
@@ -75,7 +75,7 @@ class Collector:
             response = requests.post(
                 f"{settings.ollama_base_url}/api/generate",
                 json={
-                    "model": settings.ollama_model_summary,
+                    "model": settings.ollama_model_collect,
                     "system": "Ты — аналитик базы знаний. Агрегируешь заметки в структурированное хранилище.",
                     "prompt": prompt,
                     "stream": False,
@@ -147,7 +147,6 @@ class Collector:
             logger.error(f"❌ Ошибка чтения файла: {e}")
             raise
 
-    @staticmethod
     @staticmethod
     def _build_collect_data_prompt(data: str, period_id: str, data_have: str) -> str:
         return (
