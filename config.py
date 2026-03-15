@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     path_to_raw: Path = Field(..., description="Путь к файлу сырых заметок")
     path_to_journal: Path = Field(..., description="Путь к папке ежедневных заметок")
     path_to_summary: Path = Field(..., description="Путь к папке суммари")
+    path_to_data: Path = Field(..., description="Путь к информации о человеке")
 
     # ==========================================
     # 🤖 LLM (OLLAMA)
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field("http://127.0.0.1:11434", description="URL Ollama API")
     ollama_model_clean: str = Field("llama3:8b", description="Модель для очистки текста")
     ollama_model_summary: str = Field("llama3:8b", description="Модель для суммари")
+    ollama_model_collect: str = Field("llama3:8b", description="Модель для работы с базой знаний")
     llm_temperature: float = Field(0.3, ge=0.0, le=1.0, description="Температура генерации")
     llm_timeout: int = Field(120, gt=0, description="Таймаут запроса LLM (сек)")
     # 0 = выгрузить сразу после запроса (рекомендуется для экономии VRAM)
