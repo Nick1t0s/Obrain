@@ -136,7 +136,6 @@ def handle_change_data(message):
     else:
         bot.reply_to(message, f"Успешно обновлена база знаний")
 
-@bot.message_handler(content_types=['text', 'voice'], func=lambda m: True)
 @bot.message_handler(commands=["collect"])
 def handle_collect(message):
     """Ручной запуск сбора данных за указанный день: /collect 2026-03-27"""
@@ -199,6 +198,7 @@ def handle_collect(message):
         logger.exception(f"❌ /collect: ошибка {type(e).__name__}: {e}")
         bot.reply_to(message, f"❌ Ошибка: {type(e).__name__}", parse_mode="Markdown")
 
+@bot.message_handler(content_types=['text', 'voice'], func=lambda m: True)
 def handle_message(message):
     logger.info(f"📨 Получено сообщение: type=text:{bool(message.text)}, voice:{bool(message.voice)}, from:{message.from_user.id}")
 
