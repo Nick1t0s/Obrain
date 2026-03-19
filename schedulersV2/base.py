@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class BaseScheduler(ABC):
 
     CHECK_INTERVAL = 60  # TODO: вынести в .env
+    STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
 
     def __init__(self, name: str, state_file: Path):
         self.name = name
@@ -46,6 +47,14 @@ class BaseScheduler(ABC):
             'failed_runs': [],  # История ошибок для отладки
         }
 
+    def _mark_period_processed(self, date: datetime.datetime):
+        """Помечает период как обработанный"""
+        if 'processed_periods' not in self.state:
+            self.state['processed_periods'] = []
+        if date.strftime(self.STR_FORMAT) not in self.state['processed_periods']:
+            self.state['processed_periods'].append(date)
+            self._save_state()
+
     def _save_state(self):
         """Сохраняет состояние на диск"""
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -65,9 +74,9 @@ class BaseScheduler(ABC):
         logger.warning(f"⚠️ {self.name}: найдено пропущенных запусков: {len(missed)}")
 
         MAX_CATCHUP = 3 # TODO: вынести env
-        for i, period_id in enumerate(missed[:MAX_CATCHUP], 1):
-            logger.info(f"🔄 {self.name}: catch-up [{i}/{len(missed)}] период {period_id}")
-            self._run_missed(period_id)
+        for i, date in enumerate(missed[:MAX_CATCHUP], 1):
+            logger.info(f"🔄 {self.name}: catch-up [{i}/{len(missed)}] период {date}")
+            self._run_missed(date)
 
         if len(missed) > MAX_CATCHUP:
             logger.warning(f"⚠️ {self.name}: пропущено {len(missed) - MAX_CATCHUP} запусков (лимит catch-up)")
@@ -76,6 +85,14 @@ class BaseScheduler(ABC):
         now = datetime.datetime.now()
         if self._should_run(now):
             self._run_now(now)
+
+    def _mark_date_processed(self, date: datetime.datetime):
+        """Помечает период как обработанный"""
+        if 'processed_periods' not in self.state:
+            self.state['processed_periods'] = []
+        if date.strftime(self.STR_FORMAT) not in self.state['processed_periods']:
+            self.state['processed_periods'].append(date.strftime(self.STR_FORMAT))
+            self._save_state()
 
     @abstractmethod
     def _should_run(self, now: datetime.datetime) -> bool:
