@@ -31,7 +31,7 @@ from config import settings
 
 from pathlib import Path
 import schedulers.weekly
-from schedulers.manager import SchedulerManager
+from schedulersV2.manager import SchedulerManager
 import time
 
 logging.basicConfig(
@@ -47,7 +47,7 @@ def main():
     logger.info("🚀 Запуск бота...")
     logger.info(settings)
 
-    state_dir = Path(settings.path_to_summary).parent / ".scheduler_state"
+    state_dir = Path("states")
     scheduler = SchedulerManager(state_dir)
 
     # Импорт хендлеров (регистрация команд)

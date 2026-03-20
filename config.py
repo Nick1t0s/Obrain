@@ -63,6 +63,12 @@ class Settings(BaseSettings):
     weekly_review_day: int = Field(7, ge=1, le=7, description="День недели (1=Пн, 7=Вс)")
     monthly_review_day: int = Field(31, ge=1, le=31, description="День месяца")
 
+    diff: int = Field(description="Окно времени запуска суммаризаций")
+
+    day_catchup_limit: int = Field(description="Кол-во обработки пропущенных дней")
+    week_catchup_limit: int = Field(description="Кол-во обработки пропущенных недель(в днях)")
+    month_catchup_limit: int = Field(description="Кол-во обработки пропущенных месяцев(в днях)")
+
     # ==========================================
     # 🎙️ MEDIA
     # ==========================================
