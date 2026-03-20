@@ -9,14 +9,13 @@ import requests
 
 from typing import Optional
 
-from schedulers import collector
 
 logger = logging.getLogger(__name__)
 
 
 class DailySummarizer(BaseScheduler):
 
-    STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
+    STR_FORMAT = "%d-%m-%Y"
     def __init__(self, state_dir: Path):
         self.summary_time = self._parse_time(settings.daily_summary_time)
         self.target = self._parse_time(settings.daily_summary_time)
@@ -74,7 +73,7 @@ class DailySummarizer(BaseScheduler):
         current_time = time(now.hour, now.minute)
         diff = abs((datetime.datetime.combine(now.date(), current_time) -
                     datetime.datetime.combine(now.date(), self.target)).total_seconds())
-        return diff <= 300  # TODO: Вынести в .env
+        return diff <= settings.diff
 
     def _parse_time(self, time_str: str) -> time:
         """Парсит строку "ЧЧ:ММ" в объект time"""
@@ -87,8 +86,7 @@ class DailySummarizer(BaseScheduler):
         now = datetime.datetime.now()
 
         # Проверяем последние 3 дня (на случай, если бот был выключен)
-        # TODO: вынести в .env
-        for i in range(1, 4):
+        for i in range(1, settings.day_catchup_limit):
             date = now - timedelta(days=i)
             if not self._is_period_processed(date):
                 # Проверяем, что время запуска для этого дня уже прошло
@@ -165,7 +163,6 @@ class DailySummarizer(BaseScheduler):
 
         logging.info(f"📝 {self.name}: результат сохранён в {daily_file}")
 
-        collector.collect_data(date)
 
     def _get_daily_file_path(self, date: datetime.datetime):
         return settings.path_to_journal / Path(date.strftime(self.STR_FORMAT) + ".md")

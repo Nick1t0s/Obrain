@@ -45,7 +45,7 @@ class NoteMessage:
 
         # 🔹 Метаданные
         self.timestamp_str: str = self._date.strftime("%H:%M")
-        self.date_str: str = self._date.strftime("%Y-%m-%d")
+        self.date_str: str = self._date.strftime("%d-%m-%Y")
         self.voice_duration: Optional[int] = None
 
         # 🔹 Инициализация: парсинг типа сообщения

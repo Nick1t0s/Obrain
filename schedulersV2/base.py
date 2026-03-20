@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class BaseScheduler(ABC):
 
-    CHECK_INTERVAL = 60  # TODO: вынести в .env
-    STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
+    CHECK_INTERVAL = 60
+    STR_FORMAT = "%d-%m-%Y"
 
     def __init__(self, name: str, state_file: Path):
         self.name = name
@@ -24,6 +24,7 @@ class BaseScheduler(ABC):
         self.state: dict = {}
 
         self._load_state()
+        self._catch_up_missed_runs()
 
     def _load_state(self):
         """Загружает состояние из файла или создаёт новое"""
@@ -52,7 +53,7 @@ class BaseScheduler(ABC):
         if 'processed_periods' not in self.state:
             self.state['processed_periods'] = []
         if date.strftime(self.STR_FORMAT) not in self.state['processed_periods']:
-            self.state['processed_periods'].append(date)
+            self.state['processed_periods'].append(date.strftime(self.STR_FORMAT))
             self._save_state()
 
     def _save_state(self):
@@ -73,13 +74,9 @@ class BaseScheduler(ABC):
 
         logger.warning(f"⚠️ {self.name}: найдено пропущенных запусков: {len(missed)}")
 
-        MAX_CATCHUP = 3 # TODO: вынести env
-        for i, date in enumerate(missed[:MAX_CATCHUP], 1):
+        for i, date in enumerate(missed, 1):
             logger.info(f"🔄 {self.name}: catch-up [{i}/{len(missed)}] период {date}")
             self._run_missed(date)
-
-        if len(missed) > MAX_CATCHUP:
-            logger.warning(f"⚠️ {self.name}: пропущено {len(missed) - MAX_CATCHUP} запусков (лимит catch-up)")
 
     def tick(self):
         now = datetime.datetime.now()

@@ -9,14 +9,13 @@ import requests
 
 from typing import Optional, Dict
 
-from schedulers import collector
 
 logger = logging.getLogger(__name__)
 
 
 class WeeklySummarizer(BaseScheduler):
 
-    STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
+    STR_FORMAT = "%d-%m-%Y"
     def __init__(self, state_dir: Path):
         self.summary_time = self._parse_time(settings.daily_summary_time)
         self.target = self._parse_time(settings.daily_summary_time)
@@ -74,7 +73,7 @@ class WeeklySummarizer(BaseScheduler):
         current_time = time(now.hour, now.minute)
         diff = abs((datetime.datetime.combine(now.date(), current_time) -
                     datetime.datetime.combine(now.date(), self.target)).total_seconds())
-        return diff <= 300 and now.weekday() == 6  # TODO: Вынести в .env
+        return diff <= settings.diff and now.weekday() == 6
 
     def _parse_time(self, time_str: str) -> time:
         """Парсит строку "ЧЧ:ММ" в объект time"""
@@ -82,20 +81,19 @@ class WeeklySummarizer(BaseScheduler):
         return time(h, m)
 
     def _get_missed_periods(self) -> list[str]:
-        """Находит дни, когда суммаризация не была выполнена"""
+        """Находит недели, когда суммаризация не была выполнена"""
         missed = []
         now = datetime.datetime.now()
 
-        # Проверяем последние 3 дня (на случай, если бот был выключен)
-        # TODO: вынести в .env
-        for i in range(1, 4*7): # 4 недели по 7 дней
+        # Проверяем последние 4*7 дней (на случай, если бот был выключен)
+        for i in range(1, settings.week_catchup_limit): # 4 недели по 7 дней
             date = now - timedelta(days=i)
-            if not self._is_period_processed(date):
+            run_datetime = datetime.datetime.combine(
+                date,
+                self.summary_time
+            )
+            if not self._is_period_processed(date) and self._should_run(run_datetime):
                 # Проверяем, что время запуска для этого дня уже прошло
-                run_datetime = datetime.datetime.combine(
-                    date,
-                    self.summary_time
-                )
                 if now > run_datetime:
                     missed.append(date)
 
@@ -105,7 +103,7 @@ class WeeklySummarizer(BaseScheduler):
         """Проверяет, обработан ли уже данный период"""
         return date.strftime(self.STR_FORMAT) in self.state.get('processed_periods', [])
 
-    def _collect_data(self, date: datetime.datetime) -> Dict[datetime.datetime: str]:
+    def _collect_data(self, date: datetime.datetime) -> Dict[datetime.datetime, str]:
         """Собирает обработанные заметки из ежедневного файла"""
         data: Dict[datetime.datetime: str] = {}
         for i in range(7):
@@ -122,11 +120,11 @@ class WeeklySummarizer(BaseScheduler):
 
         return data
 
-    def _build_prompt(self, data: Dict[datetime.datetime: str]) -> str:
+    def _build_prompt(self, data: Dict[datetime.datetime, str]) -> str:
         """Создает промпт для LLM"""
         # TODO: вынести в отдельный файл
         str_data = ""
-        for date, key in data:
+        for date, key in data.items():
             str_data += f"{date.strftime(self.STR_FORMAT)}: \n{key}\n"
 
         return (
@@ -173,11 +171,10 @@ class WeeklySummarizer(BaseScheduler):
 
         logging.info(f"📝 {self.name}: результат сохранён в {weekly_file}")
 
-        collector.collect_data(date)
 
     def _get_daily_file_path(self, date: datetime.datetime):
         return settings.path_to_journal / Path(date.strftime(self.STR_FORMAT) + ".md")
 
     def _get_weekly_file_path(self, date: datetime.datetime):
-        return settings.path_to_summary / Path(date.strftime(self.STR_FORMAT) + ".md")
+        return settings.path_to_summary / Path("Weekly") / Path(date.strftime(self.STR_FORMAT) + ".md")
 

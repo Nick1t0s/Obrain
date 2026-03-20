@@ -11,14 +11,13 @@ import requests
 
 from typing import Optional, Dict
 
-from schedulers import collector
 
 logger = logging.getLogger(__name__)
 
 
 class MonthlySummarizer(BaseScheduler):
 
-    STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
+    STR_FORMAT = "%d-%m-%Y"
     def __init__(self, state_dir: Path):
         self.summary_time = self._parse_time(settings.daily_summary_time)
         self.target = self._parse_time(settings.daily_summary_time)
@@ -76,7 +75,7 @@ class MonthlySummarizer(BaseScheduler):
         current_time = time(now.hour, now.minute)
         diff = abs((datetime.datetime.combine(now.date(), current_time) -
                     datetime.datetime.combine(now.date(), self.target)).total_seconds())
-        return diff <= 300 and self._is_last_day_of_month(now) # TODO: Вынести в .env
+        return diff <= settings.diff and self._is_last_day_of_month(now)
 
     def _is_last_day_of_month(self, date):
         _, last_day = calendar.monthrange(date.year, date.month)
@@ -93,16 +92,15 @@ class MonthlySummarizer(BaseScheduler):
         missed = []
         now = datetime.datetime.now()
 
-        # Проверяем последние 4*31 дня (на случай, если бот был выключен)
-        # TODO: вынести в .env
-        for i in range(1, 4*31): # 4 месяца по 31 день
+        # Проверяем последние x дня (на случай, если бот был выключен)
+        for i in range(1, settings.month_catchup_limit):
             date = now - timedelta(days=i)
-            if not self._is_period_processed(date):
+            run_datetime = datetime.datetime.combine(
+                date,
+                self.summary_time
+            )
+            if not self._is_period_processed(date) and self._should_run(run_datetime):
                 # Проверяем, что время запуска для этого дня уже прошло
-                run_datetime = datetime.datetime.combine(
-                    date,
-                    self.summary_time
-                )
                 if now > run_datetime:
                     missed.append(date)
 
@@ -112,7 +110,7 @@ class MonthlySummarizer(BaseScheduler):
         """Проверяет, обработан ли уже данный период"""
         return date.strftime(self.STR_FORMAT) in self.state.get('processed_periods', [])
 
-    def _collect_data(self, date: datetime.datetime) -> Dict[datetime.datetime: str]:
+    def _collect_data(self, date: datetime.datetime) -> Dict[datetime.datetime, str]:
         """Собирает обработанные заметки из ежедневного файла"""
         data: Dict[datetime.datetime: str] = {}
         current_date = datetime.datetime(date.year, date.month, date.day)
@@ -132,11 +130,11 @@ class MonthlySummarizer(BaseScheduler):
             current_date += datetime.timedelta(days=1)
         return data
 
-    def _build_prompt(self, data: Dict[datetime.datetime: str]) -> str:
+    def _build_prompt(self, data: Dict[datetime.datetime, str]) -> str:
         """Создает промпт для LLM"""
         # TODO: вынести в отдельный файл
         str_data = ""
-        for date, key in data:
+        for date, key in data.items():
             str_data += f"{date.strftime(self.STR_FORMAT)}: \n{key}\n"
 
         return (
@@ -174,7 +172,7 @@ class MonthlySummarizer(BaseScheduler):
 
     def _save_result(self, date: datetime.datetime, summary: str):
         """Дописывает суммаризацию в конец ежедневного файла"""
-        weekly_file = self._get_weekly_file_path(date)
+        weekly_file = self._get_monthly_file_path(date)
         weekly_file.parent.mkdir(parents=True, exist_ok=True)
 
         with open(weekly_file, 'a', encoding='utf-8') as f:
@@ -182,11 +180,10 @@ class MonthlySummarizer(BaseScheduler):
 
         logging.info(f"📝 {self.name}: результат сохранён в {weekly_file}")
 
-        collector.collect_data(date)
 
     def _get_daily_file_path(self, date: datetime.datetime):
         return settings.path_to_journal / Path(date.strftime(self.STR_FORMAT) + ".md")
 
-    def _get_weekly_file_path(self, date: datetime.datetime):
-        return settings.path_to_summary / Path(date.strftime(self.STR_FORMAT) + ".md")
+    def _get_monthly_file_path(self, date: datetime.datetime):
+        return settings.path_to_summary / Path("Monthly") / Path(date.strftime(self.STR_FORMAT) + ".md")
 
