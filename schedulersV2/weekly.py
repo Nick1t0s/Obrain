@@ -14,7 +14,7 @@ from schedulers import collector
 logger = logging.getLogger(__name__)
 
 
-class DailySummarizer(BaseScheduler):
+class Weekly(BaseScheduler):
 
     STR_FORMAT = "%d-%m-%Y" # TODO: Вынести в .env
     def __init__(self, state_dir: Path):
